@@ -118,7 +118,7 @@ bắn đón liên tục chính xác; tách config 2P/4P; early-termination calib
 
 **Lưu ý khi sửa:**
 - Tốc độ: `P_MAX/F_MAX` và horizon ảnh hưởng trực tiếp thời gian/turn (giới hạn 1s). Đo trước khi tăng.
-- Còn dấu vết engine batch (hằng số `B_DEFAULT`, `LIBRARY_K`) — không dùng ở runtime single-game, đừng nhầm.
+- Còn dấu vết engine batch (hằng số `B_DEFAULT`, `LIBRARY_K`) — không dùng ở runtime single-game.
 - Toàn bộ là tensor; muốn đổi heuristic phải hiểu shape `[S]`, `[T]`, `[S,T]`, `[T,K]`.
 - Phụ thuộc `torch`: phải có trong môi trường (Kaggle có sẵn).
 
