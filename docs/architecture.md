@@ -43,16 +43,16 @@ agent(obs)
 
 ### `constants.py` — hằng số
 Physics khớp engine (BOARD 100, CENTER 50, SUN_RADIUS 10, MAX_SHIP_SPEED 6, ROT_RADIUS_LIMIT 50).
-Đáng chú ý: tham số **early-termination** (gọi thắng sớm khi 1 người áp đảo, hiệu chỉnh trên 535 replay).
+tham số **early-termination** (gọi thắng sớm khi 1 người áp đảo, hiệu chỉnh trên 535 replay).
 Mã hoá owner tương đối: OWN/ENEMY/NEUTRAL/DEAD. Capacity `P_MAX=64`, `F_MAX=256` là trần slot.
 
 ### `geometry.py` — toán thuần tensor
-`fleet_speed(ships)` theo đúng công thức log của luật; các primitive khoảng cách điểm-đoạn,
-kiểm tra cắt mặt trời. Không import game-state → dễ test.
+`fleet_speed(ships)` các primitive khoảng cách điểm-đoạn,
+kiểm tra cắt mặt trời.
 
 ### `obs.py` — parse quan sát
 `parse_obs` biến 7-field tensor thành `ParsedObs` với trường có tên: `owner_abs`, `ships`,
-`alive`, `owned`, `prod`, toạ độ, `player_id`, `P` (số planet)... Đây là "view" tiện dụng mọi
+`alive`, `owned`, `prod`, toạ độ, `player_id`, `P` (số planet)... Đây là góc nhìn tiện dụng mọi
 module dùng.
 
 ### `adapter.py` — cầu nối định dạng
@@ -60,19 +60,19 @@ Hai chiều: `single_obs_to_tensor(obs_dict)` (dict Kaggle → tensor) và
 `sparse_action_row_to_moves(payload)` (payload planner → list `[from_id, angle, ships]` Kaggle yêu cầu).
 Xử lý cả comet (sự kiện spawn, path).
 
-### `movement.py` ★ — dự đoán tương lai (module lớn nhất, ~90 KB)
+### `movement.py`  — dự đoán tương lai 
 Trái tim "Producer". `PlanetMovement`:
 - Dự đoán vị trí hành tinh quay & comet ở mọi step trong horizon (giải tích quỹ đạo, không mô phỏng từng bước).
 - Theo dõi fleet đang bay (in-flight), ước lượng thời điểm tới.
 - `garrison_status(max_horizon=H)` chiếu **owner & số ship của từng planet qua H turn** giả định
-  mình không hành động — đây là "đường cơ sở" để so sánh giá trị mọi nước phóng.
+  mình không hành động — đây là đường cơ sở để so sánh giá trị mọi nước phóng.
 - `alive_by_step`: planet nào còn sống ở mỗi step.
 
 ### `movement_aiming.py` + `intercept_aim.py` — nhắm & bắn đón
 `intercept_aim` giải **thời điểm chạm liên tục** `t*` (nghiệm `v·t = dist(target_pos(t), src) − gap`)
 với target trên quỹ đạo giải tích → nhắm tới `target_pos(t*)`, sub-turn chính xác, và **kiểm tra
 đường bay không va sun / planet khác** (swept hit mask). Đây là điểm vượt trội so với baseline cũ
-(chỉ nhắm vị trí hiện tại).
+khi chỉ nhắm vị trí hiện tại.
 
 ### `distance_cache.py` — cache khoảng cách chéo-thời-gian
 `cross_dist[k, s, t]` = khoảng cách từ planet `s` ở step 0 tới planet `t` ở step `k`
