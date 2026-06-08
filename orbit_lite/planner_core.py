@@ -11,6 +11,9 @@ from .movement_aiming import LAUNCH_SURFACE_OFFSET, TARGET_HIT_SURFACE_OFFSET
 from .movement_step import LaunchEntries
 from .distance_cache import min_distance_to_targets
 
+
+
+
 def largest_initial_player_count(obs_tensors: dict) -> int:
     metadata_count = obs_tensors.get("player_count")
     if metadata_count is not None:
@@ -21,7 +24,7 @@ def largest_initial_player_count(obs_tensors: dict) -> int:
         )
         if count in (2, 4):
             return count
-    initial = obs_tensors["initial_planets"]      # [P, 7]
+    initial = obs_tensors["initial_planets"]      
     pid = initial[:, 0]
     owner = initial[:, 1]
     mask = (pid >= 0) & (owner >= 0)
@@ -33,11 +36,11 @@ def largest_initial_player_count(obs_tensors: dict) -> int:
 
 def make_launch_set(
     *,
-    source_slots: Tensor,  
+    source_slots: Tensor,   
     target_slots: Tensor,   
-    ships: Tensor,         
+    ships: Tensor,          
     eta: Tensor,            
-    valid: Tensor,        
+    valid: Tensor,          
     player_id: int,
 ) -> LaunchSet:
     """Build a candidate-axis ``LaunchSet`` owned by ``player_id``."""
@@ -77,6 +80,7 @@ def score_candidates(
         player_id=int(player_id),
     )
     return competitive_score(diff, player_id=int(player_id))
+
 def _stable_topk_indices(ranked: Tensor, k: int) -> Tensor:
     """Indices of the top-``k`` along the last dim, ties broken by ascending index
     identically on CPU and CUDA (stable descending sort)."""
@@ -134,12 +138,13 @@ def reinforcement_timing_factor(
 def capture_floor(
     garrison_status: PlanetGarrisonStatus,
     *,
-    target_idx: Tensor,        # [T] long
+    target_idx: Tensor,       
     k_max: int,
     capture_overhead: float,
     player_id: int,
     reinforcement: Tensor | None = None,   
 ) -> Tensor:
+
     ships = garrison_status.ships
     owner = garrison_status.owner
     dtype = ships.dtype if ships.is_floating_point() else torch.float32
@@ -150,8 +155,8 @@ def capture_floor(
     if K == 0:
         return torch.empty(T, 0, dtype=dtype, device=ships.device)
     tgt = target_idx.clamp(min=0, max=max(P - 1, 0))
-    gathered = ships[tgt].to(dtype=dtype)                       # [T, H+1]
-    owner_g = owner[tgt]                                        # [T, H+1]
+    gathered = ships[tgt].to(dtype=dtype)                       
+    owner_g = owner[tgt]                                      
     k_idx = torch.arange(1, K + 1, device=ships.device).view(1, K).expand(T, K)
     defenders = gathered.gather(-1, k_idx)                      # [T, K]
     mine_at_k = owner_g.gather(-1, k_idx) == int(player_id)
@@ -184,12 +189,10 @@ def friendly_flip_targets(
     if H <= 0:
         z = torch.zeros(P, device=device)
         return torch.zeros(P, dtype=torch.bool, device=device), z
-    owner_h = garrison_status.owner[..., 1:]                     # [P, H]
-    flips = obs.owned.unsqueeze(-1) & (owner_h != pid)           # currently mine, not mine at some k
-    any_flip = flips.any(dim=-1)                                 # [P]
-    # earliest flip turn (lowest-index True); _stable_argmax instead of raw argmax
-    # so the tie among post-flip turns resolves identically on CPU and CUDA.
-    flip_turn = _stable_argmax(flips.to(torch.int64)) + 1        # 1-based; valid where any_flip
+    owner_h = garrison_status.owner[..., 1:]                     
+    flips = obs.owned.unsqueeze(-1) & (owner_h != pid)          
+    any_flip = flips.any(dim=-1)                                 
+    flip_turn = _stable_argmax(flips.to(torch.int64)) + 1        
     remaining = (float(H) - flip_turn.to(prod.dtype)).clamp(min=0.0)
     urgency = prod * remaining + obs.ships
     urgency = torch.where(any_flip, urgency, torch.full_like(urgency, float("-inf")))
@@ -222,49 +225,47 @@ def build_target_shortlist(
 def reachable_mask(
     movement: PlanetMovement,
     *,
-    source_idx: Tensor,      # [S] long
-    target_idx: Tensor,      # [T] long
-    fleet_sizes: Tensor,     # [S, T, G] float
-    eta_cap: Tensor,         # [T] float (per-target reach cap)
+    source_idx: Tensor,      
+    target_idx: Tensor,      
+    fleet_sizes: Tensor,     
+    eta_cap: Tensor,         
     eps: float = 1e-4,
 ) -> Tensor:
+
     S, T, G = fleet_sizes.shape
     P = int(movement.P)
     dt = movement.dtype
     K = max(1, min(int(movement.movement_horizon), int(torch.ceil(eta_cap.max()).item())))
     src = source_idx.clamp(0, P - 1)
     tgt = target_idx.clamp(0, P - 1)
-
-    # Source centre @ turn 0; target positions @ turns 0..K (segment endpoints).
-    sx = movement.x[0][src].view(S, 1, 1)                                   # [S,1,1]
+    sx = movement.x[0][src].view(S, 1, 1)                                   
     sy = movement.y[0][src].view(S, 1, 1)
-    tx = movement.x[: K + 1].gather(1, tgt.view(1, T).expand(K + 1, T))     # [K+1,T]
+    tx = movement.x[: K + 1].gather(1, tgt.view(1, T).expand(K + 1, T))     
     ty = movement.y[: K + 1].gather(1, tgt.view(1, T).expand(K + 1, T))
-    ax = tx[:K, :].view(1, K, T); ay = ty[:K, :].view(1, K, T)             # tgt@(k-1)
-    bx = tx[1:, :].view(1, K, T); by = ty[1:, :].view(1, K, T)             # tgt@k
+    ax = tx[:K, :].view(1, K, T); ay = ty[:K, :].view(1, K, T)            
+    bx = tx[1:, :].view(1, K, T); by = ty[1:, :].view(1, K, T)             
 
-    # Point-to-segment distance from (sx,sy) to segment [(ax,ay),(bx,by)] → [S,K,T].
     abx = bx - ax; aby = by - ay
     apx = sx - ax; apy = sy - ay
     denom = (abx * abx + aby * aby).clamp(min=1e-12)
     u = ((apx * abx + apy * aby) / denom).clamp(0.0, 1.0)
     cx = ax + u * abx; cy = ay + u * aby
-    seg_dist = torch.sqrt(((sx - cx) ** 2 + (sy - cy) ** 2).clamp(min=0.0))  # [S,K,T]
+    seg_dist = torch.sqrt(((sx - cx) ** 2 + (sy - cy) ** 2).clamp(min=0.0))  
 
     src_r = movement.radii[src].view(S, 1, 1)
     tgt_r = movement.radii[tgt].view(1, 1, T)
     gap = src_r + tgt_r + (LAUNCH_SURFACE_OFFSET + TARGET_HIT_SURFACE_OFFSET)
-    surf = (seg_dist - gap).clamp(min=0.0)                                   # [S,K,T]
+    surf = (seg_dist - gap).clamp(min=0.0)                                  
 
     kv = torch.arange(1, K + 1, device=movement.device, dtype=dt).view(1, K, 1)
     ratio = surf / kv
-    within = kv <= eta_cap.view(1, 1, T)                                    # [1,K,T]
+    within = kv <= eta_cap.view(1, 1, T)                                    
     ratio = torch.where(within, ratio, torch.full_like(ratio, float("inf")))
-    min_ratio = ratio.amin(dim=1)                                          # [S,T]
+    min_ratio = ratio.amin(dim=1)                                         
 
-    speed = fleet_speed(fleet_sizes.clamp(min=1.0))                          # [S,T,G]
-    reachable = min_ratio.unsqueeze(-1) <= speed * (1.0 + float(eps))        # [S,T,G]
-    distinct = (src.view(S, 1) != tgt.view(1, T)).unsqueeze(-1)             # [S,T,1]
+    speed = fleet_speed(fleet_sizes.clamp(min=1.0))                          
+    reachable = min_ratio.unsqueeze(-1) <= speed * (1.0 + float(eps))        
+    distinct = (src.view(S, 1) != tgt.view(1, T)).unsqueeze(-1)             
     return reachable & distinct
 
 
@@ -277,9 +278,9 @@ def _greedy_select(
     one per target, source-budget aware across all L contributors. Enforces the
     role mutex: a reinforced planet can't also be a source, and vice-versa."""
     C, L = int(cand_src.shape[0]), int(cand_src.shape[1])
-    target_taken = ~target_exists.clone()                                        # [T]
-    defended = torch.zeros(P, dtype=torch.bool, device=device)                   # reinforced this turn
-    used_src = torch.zeros(P, dtype=torch.bool, device=device)                   # contributed this turn
+    target_taken = ~target_exists.clone()                                      
+    defended = torch.zeros(P, dtype=torch.bool, device=device)                 
+    used_src = torch.zeros(P, dtype=torch.bool, device=device)                   
 
     w_src = torch.zeros(W, L, dtype=torch.long, device=device)
     w_send = torch.zeros(W, L, dtype=dtype, device=device)
@@ -289,22 +290,20 @@ def _greedy_select(
     w_active = torch.zeros(W, L, dtype=torch.bool, device=device)
 
     for w in range(W):
-        taken_cand = target_taken[cand_tgt_short]                               # [C]
-        budget_at = source_budget[cand_src]                                     # [C, L]
-        can_fund = ((cand_send <= budget_at) | ~cand_active).all(dim=-1)        # [C]
-        # role mutex: target not already drained as a source; no contributor is a
-        # planet we're reinforcing this turn.
-        tgt_used_as_src = used_src[cand_tgt_slot]                               # [C]
-        contrib_defended = (defended[cand_src] & cand_active).any(dim=-1)       # [C]
+        taken_cand = target_taken[cand_tgt_short]                               
+        budget_at = source_budget[cand_src]                                     
+        can_fund = ((cand_send <= budget_at) | ~cand_active).all(dim=-1)        
+        tgt_used_as_src = used_src[cand_tgt_slot]                               
+        contrib_defended = (defended[cand_src] & cand_active).any(dim=-1)      
         mask = torch.isfinite(score) & ~taken_cand & can_fund & ~tgt_used_as_src & ~contrib_defended
         masked = torch.where(mask, score, torch.full_like(score, float("-inf")))
-        best_c = _stable_argmax(masked)                                         # scalar, device-stable
+        best_c = _stable_argmax(masked)                                        
         best_score = masked[best_c]
         fired = bool(torch.isfinite(best_score) & (best_score > roi_threshold))
         if not fired:
             break
 
-        sel_src = cand_src[best_c]                   # [L]
+        sel_src = cand_src[best_c]                   
         sel_send = cand_send[best_c]
         sel_active = cand_active[best_c]
         w_src[w] = sel_src
@@ -314,22 +313,16 @@ def _greedy_select(
         w_tgt[w] = cand_tgt_slot[best_c]
         w_active[w] = sel_active
 
-        # debit all contributors' sends from their source budgets.
         debit = torch.zeros_like(source_budget)
         debit.scatter_add_(0, sel_src, torch.where(sel_active, sel_send, torch.zeros_like(sel_send)))
         source_budget = (source_budget - debit).clamp(min=0.0)
-        # mark target taken (one wave per target).
         target_taken[cand_tgt_short[best_c]] = True
-        # role mutex bookkeeping: mark contributors used; mark reinforced targets
-        # defended. Sum active marks per planet (order-independent) and OR them in.
         src_mark = torch.zeros(P, dtype=torch.long, device=device)
         src_mark.scatter_add_(0, sel_src, sel_active.to(torch.long))
         used_src = used_src | (src_mark > 0)
         sel_tgt = cand_tgt_slot[best_c]
         sel_is_def = bool(cand_is_def[best_c])
         defended[sel_tgt] = defended[sel_tgt] | sel_is_def
-
-    # Flatten waves x contributors into a LaunchEntries table.
     WL = W * L
     entries = LaunchEntries(
         source_slots=w_src.reshape(WL),
@@ -339,7 +332,7 @@ def _greedy_select(
         eta=torch.where(w_active, w_eta, torch.ones_like(w_eta)).reshape(WL),
         valid=w_active.reshape(WL),
     )
-    return entries, source_budget   # source_budget = leftover ships per planet
+    return entries, source_budget   
 
 
 def _plan_regroup(
@@ -356,7 +349,7 @@ def _plan_regroup(
     if not bool(src_mask.any()):
         return _empty_entries(device, dtype)
     S_cap = max(1, min(int(config.max_regroup_sources_per_lane), P))
-    src_idx, src_exists = _candidate_indices(leftover, src_mask, S_cap)          # rank by leftover
+    src_idx, src_exists = _candidate_indices(leftover, src_mask, S_cap)         
     S = int(src_idx.shape[0])
     leftover_s = leftover[src_idx.clamp(0, P - 1)]
     orig_s = original_ships[src_idx.clamp(0, P - 1)]
@@ -370,40 +363,36 @@ def _plan_regroup(
     can_send = src_exists & (regroup_cap >= min_send)
     if not bool(can_send.any()):
         return _empty_entries(device, dtype)
-
-    # Destinations are owned, alive, non-comet planets (do-nothing projection).
     dst_mask = obs.owned & obs.alive
     comet = is_comet_planet(obs_tensors, P, device)
     if comet is not None:
         dst_mask = dst_mask & ~comet
     T_cap = max(1, min(int(config.max_regroup_targets_per_source), P))
-    dst_idx, dst_exists = _candidate_indices(pressure, dst_mask, T_cap)          # rank by pressure
+    dst_idx, dst_exists = _candidate_indices(pressure, dst_mask, T_cap)          
     T = int(dst_idx.shape[0])
     regroup_active = reachable_mask(
         movement, source_idx=src_idx, target_idx=dst_idx,
         fleet_sizes=regroup_cap.view(S, 1, 1).expand(S, T, 1),
         eta_cap=torch.full((T,), float(config.max_regroup_time), device=device),
-    ).squeeze(-1)                                                                # [S, T]
+    ).squeeze(-1)                                                                
     aim = intercept_angle(
         movement,
-        src_idx.unsqueeze(1),                                                    # [S, 1]
-        dst_idx.unsqueeze(0),                                                     # [1, T]
-        regroup_cap.unsqueeze(1),                                                 # [S, 1]
+        src_idx.unsqueeze(1),                                                   
+        dst_idx.unsqueeze(0),                                                    
+        regroup_cap.unsqueeze(1),                                               
         active=regroup_active,
     )
-    angle = aim["angle"]                                                         # [S, T]
+    angle = aim["angle"]                                                        
     eta = aim["eta"]
     viable = aim["viable"]
 
     src_pres = pressure[src_idx.clamp(0, P - 1)].view(S, 1)
     dst_pres = pressure[dst_idx.clamp(0, P - 1)].view(1, T)
-    gap = dst_pres - src_pres                                                    # [S, T]
-
-    # arrival-turn ownership check: dst must still be mine at k = ceil(eta).
-    owner = garrison_status.owner                                               # [P, H+1]
+    gap = dst_pres - src_pres                                                    
+    owner = garrison_status.owner                                               
     H_axis = int(owner.shape[-1])
-    dst_owner = owner[dst_idx.clamp(0, P - 1)]                                  # [T, H+1]
-    k = torch.ceil(eta).clamp(min=0, max=H_axis - 1).to(torch.long)             # [S, T]
+    dst_owner = owner[dst_idx.clamp(0, P - 1)]                                 
+    k = torch.ceil(eta).clamp(min=0, max=H_axis - 1).to(torch.long)             
     owner_at_k = dst_owner.unsqueeze(0).expand(S, T, H_axis).gather(-1, k.unsqueeze(-1)).squeeze(-1)
     still_mine = owner_at_k == pid
 
@@ -419,11 +408,11 @@ def _plan_regroup(
         gap - float(config.regroup_time_penalty_weight) * eta,
         torch.full_like(gap, float("-inf")),
     )
-    best_t = _stable_argmax(sc)                                                  # [S] device-stable
-    best_score = sc.gather(-1, best_t.unsqueeze(-1)).squeeze(-1)                 # [S]
+    best_t = _stable_argmax(sc)                                                 
+    best_score = sc.gather(-1, best_t.unsqueeze(-1)).squeeze(-1)                
     best_valid = torch.isfinite(best_score)
     s_ar = torch.arange(S, device=device)
-    best_dst = dst_idx[best_t]                                                   # [S]
+    best_dst = dst_idx[best_t]                                                
     best_angle = angle[s_ar, best_t]
     best_eta = eta[s_ar, best_t]
 
@@ -479,13 +468,12 @@ def empty_action_row(device: torch.device) -> dict[str, Tensor]:
         "counts": torch.zeros((), dtype=torch.int32, device=device),
     }
 
-
 def safe_drain(
     garrison_status: PlanetGarrisonStatus,
     *,
-    source_idx: Tensor,            # [S] long — planet slots to evaluate
-    source_ships: Tensor,          # [S] float — current garrison at those slots
-    H_eff: Tensor,                 # scalar float — horizon to protect the source over
+    source_idx: Tensor,           
+    source_ships: Tensor,        
+    H_eff: Tensor,                
     player_id: int = 0,
 ) -> Tensor:
     S = source_idx.shape[0]
@@ -501,15 +489,15 @@ def safe_drain(
 
     src_idx_safe = source_idx.clamp(min=0, max=max(P - 1, 0))
 
-    src_ships_traj = ships_cache[src_idx_safe][..., 1:].to(dtype=dtype)          # [S, H]
-    src_owner_traj = garrison_status.owner[src_idx_safe][..., 1:]                 # [S, H]
+    src_ships_traj = ships_cache[src_idx_safe][..., 1:].to(dtype=dtype)         
+    src_owner_traj = garrison_status.owner[src_idx_safe][..., 1:]                 
     me_owned = src_owner_traj == int(player_id)
 
     turn_grid = torch.arange(1, H + 1, device=device, dtype=dtype).view(1, H)
-    within_horizon = turn_grid <= H_eff                                          # H_eff scalar
+    within_horizon = turn_grid <= H_eff                                          
 
     held = me_owned & within_horizon & (src_ships_traj > 0.0)
     inf_fill = torch.full_like(src_ships_traj, float("inf"))
     cap_traj = torch.where(held, src_ships_traj, inf_fill)
-    min_slack = cap_traj.min(dim=-1).values                                       # [S]
+    min_slack = cap_traj.min(dim=-1).values                                     
     return torch.minimum(min_slack, source_ships.to(dtype)).clamp(min=0.0)
