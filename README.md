@@ -145,25 +145,24 @@ Bot liên tục cập nhật trạng thái môi trường và tạo ra danh sác
 
 ---
 
-## Hướng phát triển
+## Nộp lên Kaggle
 
-Các hướng nâng cấp trong tương lai bao gồm:
+Vì agent gồm nhiều tệp (`main.py` cần dùng package `orbit_lite/`), không thể nộp một file `.py` đơn lẻ. Cần **gộp `main.py` và thư mục `orbit_lite/` thành một file nén `submission.tar.gz`** rồi nộp file đó lên Kaggle.
 
-* Monte Carlo Tree Search (MCTS)
-* Opponent Modeling
-* Influence Maps
-* Reinforcement Learning
-* Deep Reinforcement Learning
-* Evolutionary Algorithms
-* Neural Network Value Function
+### 1. Gộp thủ công thành `submission.tar.gz`
 
----
+Chọn **cả `main.py` và thư mục `orbit_lite/`**, rồi nén lại thành một file `.tar.gz` . Đặt tên file là `submission.tar.gz`.
 
-## Kết quả kỳ vọng
+Lưu ý quan trọng: `main.py` phải nằm ở **gốc** của file nén, ngang hàng với thư mục `orbit_lite/`. Cấu trúc bên trong phải là:
 
-Dự án hướng tới việc xây dựng một tác tử có khả năng:
+​```
+submission.tar.gz
+├── main.py
+└── orbit_lite/
+    ├── __init__.py
+    ├── movement.py
+    ├── planner_core.py
+    └── ...
+​```
 
-* Mở rộng lãnh thổ hiệu quả.
-* Duy trì lợi thế kinh tế lâu dài.
-* Đối phó với nhiều loại đối thủ khác nhau.
-* Đạt thứ hạng cao trên bảng xếp hạng Orbit Wars của Kaggle.
+
